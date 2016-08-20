@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Class-Path: /Users/zhaokangpan/Bigdata/spark-1.6.1-bin-hadoop2.4/lib/s
+ park-assembly-1.6.1-hadoop2.4.0.jar
+Main-Class: spark.mllib.SparkGibbsLDAWeibo
+
