@@ -1,13 +1,11 @@
 package spark.mllib
 
-
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 
-import scala.util.Random
 import scala.collection.mutable.{ArrayBuffer, HashMap}
-import org.apache.spark.rdd.RDD
+import scala.util.Random
 
 
 /**
@@ -20,7 +18,7 @@ import org.apache.spark.rdd.RDD
   * liupeng9966@163.com
   * 2013-04-24
   */
-object SparkGibbsLDAWeibo {
+object SparkGibbsLDALocal {
 
   /**
     * print out topics
@@ -213,24 +211,24 @@ object SparkGibbsLDAWeibo {
     sc.parallelize(nkvWithId).map{
       case(k, nkvtmp) =>
         k + ", " + nkvtmp.toList
-    }.saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/nkv")
+    }.saveAsTextFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/nkv")
 
     //val sc1 = restartSpark(sc, "spark://202.112.113.199:7077", true)
 
     //save nk
-    /*val nkWithId = new ArrayBuffer[(Int, Int)]()
+    val nkWithId = new ArrayBuffer[(Int, Int)]()
     for (k <- 0 until topicK) {
       nkWithId.+=((k, nk(k)))
     }
-    sc1.parallelize(nkWithId).map( l => l._1 + " " + l._2).saveAsTextFile("hdfs://localhost:9000/user/hduser/zhaokangpan/weibo/out/nk")
+    sc.parallelize(nkWithId).map( l => l._1 + " " + l._2).saveAsTextFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/nk")
 
 
     //save nmk
-    sc1.parallelize(nmk).map{
+    sc.parallelize(nmk).map{
       case(userId, docId, nmk) =>
         val nmklist = nmk.toList
         userId + ", " + docId + ", " + nmklist
-    }.saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/nmk")*/
+    }.saveAsTextFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/nmk")
   }
 
   def saveWordIndexMap( sc: SparkContext, wordMap : HashMap[String, Int]): Unit ={
@@ -238,7 +236,7 @@ object SparkGibbsLDAWeibo {
     for(item <- wordMap){
       wordArray.+=(item._2 + " " + item._1)
     }
-    sc.parallelize(wordArray).saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/wordMap")
+    sc.parallelize(wordArray).saveAsTextFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/wordMap")
   }
 
 
@@ -289,7 +287,7 @@ object SparkGibbsLDAWeibo {
       wordIndexMap(allWords(i)) = i
     }
     val bWordIndexMap = wordIndexMap
-    //saveWordIndexMap(sc, bWordIndexMap)
+    saveWordIndexMap(sc, bWordIndexMap)
 
     //step3_same
     /*val allWords_temp = sc.textFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/wordMap/part-*").map( l => {
@@ -395,23 +393,23 @@ object SparkGibbsLDAWeibo {
     //Step6,save the result in HDFS (result part 1: topic distribution of doc, result part 2: top words in each topic)
     var resultDocuments = iterativeInputDocuments
     iterativeInputDocuments.unpersist(blocking = false)
-    //saveDocTopicDist(resultDocuments, pathTopicDistOnDoc)
+    saveDocTopicDist(resultDocuments, pathTopicDistOnDoc)
     resultDocuments.unpersist(blocking = false)
-    //saveWordDistTopic(sc, nkv, nk, allWords, vSize, topKwordsForDebug, pathWordDistOnTopic)
+    saveWordDistTopic(sc, nkv, nk, allWords, vSize, topKwordsForDebug, pathWordDistOnTopic)
     val finalNmk = iterativeInputDocuments.map( t => (t._1, t._2, t._4)).collect
     saveNkvNkNmk(sc, vSize, nkv, nk, finalNmk)
   }
 
   def main(args: Array[String]) {
 
-    val fileName = args(0)
-    val kTopic = args(1).toInt
+    val fileName = "weiboLdaTest.txt"
+    val kTopic = 10
     val alpha = 0.45
     val beta = 0.01
-    val maxIter = args(2).toInt
-    val remote = true
-    val iterflag = args(3).toInt
-    val rate = args(4).toDouble
+    val maxIter = 20
+    val remote = false
+    val iterflag = 30
+    val rate = 1
     val topKwordsForDebug = 10
     var pathTopicDistOnDoc = ""
     var pathWordDistOnTopic = ""

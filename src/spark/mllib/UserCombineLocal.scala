@@ -1,16 +1,16 @@
 package spark.mllib
 
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.{SparkContext, SparkConf}
+import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.collection.mutable.{HashMap, ArrayBuffer}
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Created by zhaokangpan on 16/6/13.
   * args(0)文件名
   * args(1)选取queryset中词的个数
   */
-object UserCombine {
+object UserCombineLocal {
 
   def main(args : Array[String]): Unit ={
     val prefix = "/Users/zhaokangpan/Documents/sparklda/"
@@ -21,7 +21,7 @@ object UserCombine {
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     //设置运行环境
-    val conf = new SparkConf().setAppName("UserCombine")//.setMaster("local")
+    val conf = new SparkConf().setAppName("UserCombine").setMaster("local[4]")
     val sc = new SparkContext(conf)
 
     /*//读取querySet
@@ -47,7 +47,7 @@ object UserCombine {
     val queryJoinWordIndex = sc.parallelize(sc.textFile(wordIndexFile).filter( l => l.split(" ").length == 2).map( line => {
       val p = line.split(" ")
       (p(0),p(1))
-    }).take(args(1).toInt))//(index, 宋仲基)
+    }).take(2000))//(index, 宋仲基)
 
     //将连接结果与nkv中每一个topic下的每一个进行连接
 
@@ -78,7 +78,7 @@ object UserCombine {
     //val ntphi = queryJoinWordIndex.leftOuterJoin(antiNkv).map( line => (line._1, line._2._2.getOrElse(0)))
 
     //进行对整个文本集的wordcount
-    val nt = sc.textFile(prefix + args(0)).filter{
+    val nt = sc.textFile("weiboLdaTest.txt").filter{
       line => line.split("\t").length == 3
     }.flatMap { line =>
       line.split("\t")(2).split(" ")
@@ -121,7 +121,7 @@ object UserCombine {
      * 计算P_ML (t|M_D )=tf(t,D)/(|D|)
      */
     //统计全部文档数
-    val allDoc = sc.textFile(prefix + args(0))
+    val allDoc = sc.textFile("weiboLdaTest.txt")
 
     //统计文档数
     val D = allDoc.count
