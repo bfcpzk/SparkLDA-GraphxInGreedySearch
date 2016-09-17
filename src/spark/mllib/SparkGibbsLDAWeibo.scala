@@ -2,7 +2,7 @@ package spark.mllib
 
 
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
 
 import scala.util.Random
@@ -19,6 +19,10 @@ import org.apache.spark.rdd.RDD
   * huangwaleking@gmail.com
   * liupeng9966@163.com
   * 2013-04-24
+  *
+  * args(0) prefix
+  * args(1)
+  *
   */
 object SparkGibbsLDAWeibo {
 
@@ -137,10 +141,10 @@ object SparkGibbsLDAWeibo {
     * start spark at 192.9.200.175:7077 if remote==true
     * or start it locally when remote==false
     */
-  def startSpark(remote: Boolean) = {
+  def startSpark(remote : Boolean, scMaster : String) = {
     if (remote == true) {
-      val scMaster = "spark://202.112.113.199:7077" // e.g. 集群
-      val sparkContext = new SparkContext(scMaster, "SparkGibbsLDAWeibo", "./", Seq("SparkGibbsLDAWeibo.jar"))
+      // e.g. 集群
+      val sparkContext = new SparkContext(new SparkConf().setAppName("SparkGibbsLDAWeibo").setMaster(scMaster))
       (scMaster, sparkContext)
     } else {
       val scMaster = "local[4]" // e.g. local[4]
@@ -203,7 +207,7 @@ object SparkGibbsLDAWeibo {
   /**
     *  save nkv, nk, nmk in each doc
     */
-  def saveNkvNkNmk(sc: SparkContext, vSize : Int, nkv: Array[Array[Int]], nk: Array[Int], nmk : Array[(String, String, Array[Int])]): Unit ={
+  def saveNkvNkNmk(sc: SparkContext, vSize : Int, nkv: Array[Array[Int]], nk: Array[Int], nmk : Array[(String, String, Array[Int])], prefix : String): Unit ={
     val topicK = nkv.length
     //save nkv
     val nkvWithId = Array.fill(topicK) { (0, Array[Int](vSize)) }
@@ -213,32 +217,32 @@ object SparkGibbsLDAWeibo {
     sc.parallelize(nkvWithId).map{
       case(k, nkvtmp) =>
         k + ", " + nkvtmp.toList
-    }.saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/nkv")
+    }.saveAsTextFile(prefix + "weibo/out/nkv")
 
     //val sc1 = restartSpark(sc, "spark://202.112.113.199:7077", true)
 
     //save nk
-    /*val nkWithId = new ArrayBuffer[(Int, Int)]()
+    val nkWithId = new ArrayBuffer[(Int, Int)]()
     for (k <- 0 until topicK) {
       nkWithId.+=((k, nk(k)))
     }
-    sc1.parallelize(nkWithId).map( l => l._1 + " " + l._2).saveAsTextFile("hdfs://localhost:9000/user/hduser/zhaokangpan/weibo/out/nk")
+    sc.parallelize(nkWithId).map( l => l._1 + " " + l._2).saveAsTextFile(prefix + "weibo/out/nk")
 
 
     //save nmk
-    sc1.parallelize(nmk).map{
+    sc.parallelize(nmk).map{
       case(userId, docId, nmk) =>
         val nmklist = nmk.toList
         userId + ", " + docId + ", " + nmklist
-    }.saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/nmk")*/
+    }.saveAsTextFile(prefix + "weibo/out/nmk")
   }
 
-  def saveWordIndexMap( sc: SparkContext, wordMap : HashMap[String, Int]): Unit ={
+  def saveWordIndexMap( sc: SparkContext, wordMap : HashMap[String, Int], prefix : String): Unit ={
     val wordArray = new ArrayBuffer[String]()
     for(item <- wordMap){
       wordArray.+=(item._2 + " " + item._1)
     }
-    sc.parallelize(wordArray).saveAsTextFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/wordMap")
+    sc.parallelize(wordArray).saveAsTextFile(prefix + "weibo/out/wordMap")
   }
 
 
@@ -254,18 +258,17 @@ object SparkGibbsLDAWeibo {
     */
   def lda(filename: String, kTopic: Int, alpha: Double, beta: Double,
           maxIter: Int, remote: Boolean, topKwordsForDebug: Int,
-          pathTopicDistOnDoc: String, pathWordDistOnTopic: String, iterflag: Int, rate: Double) {
+          pathTopicDistOnDoc: String, pathWordDistOnTopic: String, iterflag: Int, prefix: String, master : String) {
     //Step 1, start spark
     System.setProperty("file.encoding", "UTF-8")
-    var (scMaster, sc) = startSpark(remote)
+    var (scMaster, sc) = startSpark(remote, master)
 
     //Step2, read files into HDFS
-    val file = sc.textFile(filename).sample(false, rate, 11L)
-    val tempFile = file.filter{
+    // .sample(false, rate, 11L)
+    val tempFile = sc.textFile(filename).filter{
       line => line.split("\t").length == 3
     }.coalesce(10, false)
-    //释放资源
-    file.unpersist(blocking = false)
+
     val rawFiles = tempFile.map { line =>
       {
         val vs = line.split("\t")
@@ -289,7 +292,7 @@ object SparkGibbsLDAWeibo {
       wordIndexMap(allWords(i)) = i
     }
     val bWordIndexMap = wordIndexMap
-    //saveWordIndexMap(sc, bWordIndexMap)
+    saveWordIndexMap(sc, bWordIndexMap, prefix)
 
     //step3_same
     /*val allWords_temp = sc.textFile("hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/wordMap/part-*").map( l => {
@@ -368,8 +371,8 @@ object SparkGibbsLDAWeibo {
         var pathDocument1=""
         var pathDocument2=""
         if(remote==true){
-          pathDocument1="hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/gibbsLDAtmp_final_" + kTopic + "_" + iter
-          pathDocument2="hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/gibbsLDAtmp2_final_" + kTopic + "_" + iter
+          pathDocument1= prefix + "weibo/out/gibbsLDAtmp_final_" + kTopic + "_" + iter
+          pathDocument2= prefix + "weibo/out/gibbsLDAtmp2_final_" + kTopic + "_" + iter
         }else{
           pathDocument1="/Users/zhaokangpan/Documents/sparklda/weibo/out/gibbsLDAtmp"
           pathDocument2="/Users/zhaokangpan/Documents/sparklda/weibo/out/gibbsLDAtmp2"
@@ -395,34 +398,36 @@ object SparkGibbsLDAWeibo {
     //Step6,save the result in HDFS (result part 1: topic distribution of doc, result part 2: top words in each topic)
     var resultDocuments = iterativeInputDocuments
     iterativeInputDocuments.unpersist(blocking = false)
-    //saveDocTopicDist(resultDocuments, pathTopicDistOnDoc)
+    saveDocTopicDist(resultDocuments, pathTopicDistOnDoc)
     resultDocuments.unpersist(blocking = false)
-    //saveWordDistTopic(sc, nkv, nk, allWords, vSize, topKwordsForDebug, pathWordDistOnTopic)
+    saveWordDistTopic(sc, nkv, nk, allWords, vSize, topKwordsForDebug, pathWordDistOnTopic)
     val finalNmk = iterativeInputDocuments.map( t => (t._1, t._2, t._4)).collect
-    saveNkvNkNmk(sc, vSize, nkv, nk, finalNmk)
+    saveNkvNkNmk(sc, vSize, nkv, nk, finalNmk, prefix)
   }
 
   def main(args: Array[String]) {
 
-    val fileName = args(0)
-    val kTopic = args(1).toInt
+    val master = args(5)
+    val prefix = args(0)
+    val fileName = args(1)
+    val kTopic = args(2).toInt
     val alpha = 0.45
     val beta = 0.01
-    val maxIter = args(2).toInt
+    val maxIter = args(3).toInt
     val remote = true
-    val iterflag = args(3).toInt
-    val rate = args(4).toDouble
+    val iterflag = args(4).toInt
+    //val rate = args(4).toDouble
     val topKwordsForDebug = 10
     var pathTopicDistOnDoc = ""
     var pathWordDistOnTopic = ""
     if (remote == true) {
-      pathTopicDistOnDoc = "hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/topicDistOnDoc"
-      pathWordDistOnTopic = "hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/weibo/out/wordDistOnTopic"
+      pathTopicDistOnDoc = prefix + "weibo/out/topicDistOnDoc"
+      pathWordDistOnTopic = prefix + "weibo/out/wordDistOnTopic"
     } else {
       pathTopicDistOnDoc = "/Users/zhaokangpan/Documents/sparklda/weibo/out/topicDistOnDoc"
       pathWordDistOnTopic = "/Users/zhaokangpan/Documents/sparklda/weibo/out/wordDistOnTopic"
     }
-    lda(fileName, kTopic, alpha, beta, maxIter, remote, topKwordsForDebug, pathTopicDistOnDoc, pathWordDistOnTopic, iterflag, rate)
+    lda(fileName, kTopic, alpha, beta, maxIter, remote, topKwordsForDebug, pathTopicDistOnDoc, pathWordDistOnTopic, iterflag, prefix, master)
   }
 
 }

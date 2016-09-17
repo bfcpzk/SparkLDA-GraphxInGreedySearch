@@ -7,14 +7,15 @@ import scala.collection.mutable.{HashMap, ArrayBuffer}
 
 /**
   * Created by zhaokangpan on 16/6/13.
-  * args(0)文件名
-  * args(1)选取queryset中词的个数
+  * args(0) filename
+  * args(1) 选取queryset中词的个数
+  * args(2) location on hdfs(prefix)
   */
 object UserCombine {
 
   def main(args : Array[String]): Unit ={
-    val prefix = "/Users/zhaokangpan/Documents/sparklda/"
-    //val prefix = "hdfs://202.112.113.199:9000/user/hduser/zhaokangpan/"
+    //val prefix = "/Users/zhaokangpan/Documents/sparklda/"
+    val prefix = args(2)
 
     //屏蔽日志
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)

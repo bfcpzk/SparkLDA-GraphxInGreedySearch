@@ -7,12 +7,12 @@ import scala.util.Random
 
 /**
   * Created by zhaokangpan on 16/9/10.
-  * args(0) masterip
-  * args(1) location on hdfs(prefix)
-  * args(2) a text wait for judging
   */
-object SparkGibbsLDAPredict {
+object SparkGibbsLDAPredictLocal {
 
+
+  //set runtime environment
+  val sc = new SparkContext(new SparkConf().setAppName("SparkGibbsLDAPredict").setMaster("local[4]"))
 
   val maxiter = 50
   /**
@@ -88,6 +88,7 @@ object SparkGibbsLDAPredict {
     for( k <- 0 until K){
       theta(k) = (nd(k) + alpha) / (ndsum + K * alpha)
     }
+
     theta
   }
 
@@ -110,19 +111,14 @@ object SparkGibbsLDAPredict {
 
   def main(args: Array[String]) {
 
-    //set runtime environment
-    val sc = new SparkContext(new SparkConf().setAppName("SparkGibbsLDAPredict").setMaster(args(0)))
-
-    val prefix = args(1)
-
     //origin text
-    val text = args(2)
+    val text = "抄 手 北京 美食 海淀 吃 美食 攻 编 盘点 海淀 吃 美食 冰山 一角 美食 等待 去 发现"
 
     //text change
     val process_text = text.split(" ").map( l => (l, 1))
 
     //init wordMap
-    val wordMap = sc.textFile(prefix + "weibo/out/wordMap").map( l => {
+    val wordMap = sc.textFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/wordMap").map( l => {
       val p = l.split(" ")
       (p(1), p(0).toInt)//(宋仲基, 23)
     })
@@ -133,7 +129,7 @@ object SparkGibbsLDAPredict {
     val numtext = sc.parallelize(process_text).repartition(1).leftOuterJoin(wordMap).map( l => l._2._2.getOrElse((Random.nextDouble() * vSize).toInt)).collect
 
     //init matrix phi
-    val phi = sc.textFile(prefix + "weibo/out/wordDistOnTopic").map(line => {
+    val phi = sc.textFile("/Users/zhaokangpan/Documents/sparklda/weibo/out/wordDistOnTopic/part-*").map(line => {
       val tmp = line.replace(")", "").replace("List(", "").split(", ")
       val nkvWithId = ArrayBuffer[Double]()
       for (k <- 1 until tmp.length) {
@@ -145,6 +141,5 @@ object SparkGibbsLDAPredict {
     val beta = 0.01
     val theta = inference(alpha, beta, phi, numtext)
     println(theta.mkString(","))
-    sc.parallelize(List(theta.mkString(",")), 1).saveAsTextFile(prefix + "weibo/out/theta")
   }
 }
